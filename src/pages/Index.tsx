@@ -8,7 +8,7 @@ import SorteoInfoSection from "@/components/SorteoInfoSection";
 import { ProbabilityPanel } from "@/components/ProbabilityPanel";
 import { EnjauladosPanel } from "@/components/EnjauladosPanel";
 import { AnimalCarousel } from "@/components/AnimalCarousel";
-import { useSorteos } from "@/hooks/useSorteos";
+import { useSorteosContext } from "@/context/SorteosContext";
 import { useEnjaulados } from "@/hooks/useEnjaulados";
 import { useTheme } from "@/hooks/useTheme";
 import { Loader2 } from "lucide-react";
@@ -20,7 +20,7 @@ const Index = () => {
   const premiosRef = useRef<HTMLDivElement>(null);
   const probRef    = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
-  const { results, loading, error } = useSorteos();
+  const { results, loading, error } = useSorteosContext();
   const enjaulados = useEnjaulados(results);
 
   // tick "updated X mins ago"

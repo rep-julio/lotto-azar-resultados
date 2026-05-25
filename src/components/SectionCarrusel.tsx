@@ -48,7 +48,7 @@ export const SectionCarrusel: React.FC = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("carrusel_animales")
-      .select("*")
+      .select("id, nombre, imagen_url, orden")
       .order("orden", { ascending: true });
     if (!error && data) setAnimals(data);
     setLoading(false);
@@ -73,7 +73,11 @@ export const SectionCarrusel: React.FC = () => {
         // 1. Upload to storage
         const { error: storageErr } = await supabase.storage
           .from(BUCKET)
-          .upload(fileName, file, { contentType: file.type, upsert: false });
+          .upload(fileName, file, { 
+            contentType: file.type, 
+            cacheControl: "31536000",
+            upsert: false 
+          });
 
         if (storageErr) throw storageErr;
 

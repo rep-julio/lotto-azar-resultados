@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { HOURS_LIST } from "@/data/mockData";
 import { formatAnimalNumber } from "@/lib/utils";
-import { useSorteos } from "@/hooks/useSorteos";
+import { useSorteosContext } from "@/context/SorteosContext";
 
 /* ─── Helpers de tiempo ────────────────────────────────────────── */
 
@@ -99,7 +99,7 @@ const HeroSection = ({ updatedAgo }: HeroSectionProps) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Datos reales de sorteos
-  const { results, loading } = useSorteos();
+  const { results, loading } = useSorteosContext();
   const today = getTodayStr();
 
   /** Busca el resultado real para la hora mostrada. Si no existe, retorna null. */
@@ -150,7 +150,8 @@ const HeroSection = ({ updatedAgo }: HeroSectionProps) => {
     transitionTo(idx, idx > displayIdx ? "forward" : "back");
   };
 
-  const mins = String(Math.floor(countdown / 60)).padStart(2, "0");
+  const hrs = Math.floor(countdown / 3600);
+  const mins = String(Math.floor((countdown % 3600) / 60)).padStart(2, "0");
   const secs = String(countdown % 60).padStart(2, "0");
 
   // Variantes de animación framer-motion
@@ -350,7 +351,7 @@ const HeroSection = ({ updatedAgo }: HeroSectionProps) => {
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             <span className="text-xs font-medium" style={{ color: "#cbd5e1" }}>Próximo en</span>
             <span className="text-sm font-bold font-mono" style={{ color: "#fbbf24" }}>
-              {mins}:{secs}
+              {hrs > 0 ? `${String(hrs).padStart(2, "0")}:` : ""}{mins}:{secs}
             </span>
           </motion.div>
         )}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { LotteryResult, ANIMALS } from "@/data/mockData";
+import { getCachedForever, setCached, CACHE_KEYS } from "@/lib/cache";
 
 interface SorteoRow {
   id: number;
@@ -42,17 +43,51 @@ function hourStrToNum(hourStr: string): number {
   return h;
 }
 
-/** Hash ligero: serializa los IDs ordenados para detectar cambios sin deep-compare. */
-function hashIds(rows: SorteoRow[]): string {
+/** Convierte una fila de Supabase al formato LotteryResult */
+function rowToResult(row: SorteoRow): LotteryResult {
+  const catalogEmoji = ANIMALS.find((a) => a.name === row.animal)?.emoji ?? row.emoji;
+  return {
+    id: row.id,
+    animal: row.animal,
+    number: row.numero,
+    hour: row.hora,
+    date: row.fecha,
+    emoji: catalogEmoji,
+  };
+}
+
+/**
+ * Fusiona resultados nuevos con los cacheados.
+ * Usa el id como clave única para evitar duplicados.
+ * Ordena: fecha desc, hora asc.
+ */
+function mergeResults(cached: LotteryResult[], incoming: LotteryResult[]): LotteryResult[] {
+  const map = new Map<number, LotteryResult>();
+  for (const r of cached) map.set(r.id, r);
+  for (const r of incoming) map.set(r.id, r); // incoming sobreescribe
+  return Array.from(map.values()).sort((a, b) => {
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    return a.hour.localeCompare(b.hour);
+  });
+}
+
+/** Hash ligero para detectar cambios sin deep-compare. */
+function hashIds(rows: LotteryResult[]): string {
   return rows.map((r) => r.id).sort((a, b) => a - b).join(",");
 }
 
+// Polling de respaldo: cada 5 minutos (antes era cada 30 segundos)
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
+
 export function useSorteos(): UseSorteosResult {
-  const [results, setResults] = useState<LotteryResult[]>([]);
+  // Inicializar desde caché inmediatamente (0ms de espera visible)
+  const [results, setResults] = useState<LotteryResult[]>(() => {
+    return getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const lastHashRef = useRef<string>("");
-  
+
   // Reloj reactivo para revelar el sorteo puntualmente al iniciar su hora
   const [currentH, setCurrentH] = useState(() => nowInVenezuela().h);
 
@@ -71,43 +106,61 @@ export function useSorteos(): UseSorteosResult {
       if (!silent) setLoading(true);
       setError(null);
 
+      // ── Fetch delta: solo pedir datos desde la última fecha cacheada ──
+      // Los sorteos históricos son inmutables → no hace falta re-descargarlos.
+      // Solo traemos desde la fecha más reciente que ya tenemos, o solo hoy si no hay caché.
+      const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+      const today = getTodayStrVE();
+
+      // La fecha "desde" es el max entre: 7 días atrás (para tener historial mínimo visible)
+      // o la fecha más reciente cacheada (para no re-descargar lo que ya tenemos).
+      // Si no hay caché: bajar 90 días para la primera carga.
+      let fromDate: string;
+      if (cached.length === 0) {
+        // Primera visita: bajar 90 días de historial
+        const d = new Date();
+        d.setDate(d.getDate() - 90);
+        fromDate = d.toISOString().split("T")[0];
+      } else {
+        // Visitas siguientes: solo pedir desde ayer (para cubrir cambios del día anterior y hoy)
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        fromDate = d.toISOString().split("T")[0];
+      }
+
       const { data, error: sbError } = await supabase
         .from("sorteos")
         .select("id, animal, numero, hora, fecha, emoji")
+        .gte("fecha", fromDate)          // ← Fetch delta: solo desde la última fecha
         .order("fecha", { ascending: false })
-        .order("hora", { ascending: true });
+        .order("hora", { ascending: true })
+        .limit(200);
 
       if (cancelled) return;
 
       if (sbError) {
         console.error("[useSorteos] Error al obtener sorteos:", sbError.message);
         setError(sbError.message);
-        setLoading(false);
+        // Si hay caché, seguir mostrándola aunque falle Supabase
+        if (cached.length > 0 && !silent) setLoading(false);
+        else setLoading(false);
         return;
       }
 
-      const rows = data as SorteoRow[];
+      const incoming = (data as SorteoRow[]).map(rowToResult);
 
-      // Solo actualizar el estado si hubo cambios reales (evita re-renders innecesarios)
-      const newHash = hashIds(rows);
+      // Fusionar con caché existente
+      const merged = mergeResults(cached, incoming);
+
+      // Solo actualizar el estado si hubo cambios reales
+      const newHash = hashIds(merged);
       if (silent && newHash === lastHashRef.current) return;
       lastHashRef.current = newHash;
 
-      // El emoji se resuelve SIEMPRE desde el catálogo local para reflejar
-      // cualquier cambio en mockData.ts sin depender de lo guardado en la BD.
-      const mapped: LotteryResult[] = rows.map((row) => {
-        const catalogEmoji = ANIMALS.find((a) => a.name === row.animal)?.emoji ?? row.emoji;
-        return {
-          id: row.id,
-          animal: row.animal,
-          number: row.numero,
-          hour: row.hora,
-          date: row.fecha,
-          emoji: catalogEmoji,
-        };
-      });
+      // Guardar en caché para las próximas visitas
+      setCached(CACHE_KEYS.SORTEOS, merged);
 
-      setResults(mapped);
+      setResults(merged);
       setLoading(false);
     }
 
@@ -120,15 +173,15 @@ export function useSorteos(): UseSorteosResult {
         "postgres_changes",
         { event: "*", schema: "public", table: "sorteos" },
         () => {
-          if (!cancelled) fetchSorteos();
+          if (!cancelled) fetchSorteos(true);
         }
       )
       .subscribe();
 
-    // Polling de respaldo cada 30 s (por si el WebSocket cae)
+    // Polling de respaldo cada 5 min (antes 30s) — solo busca delta
     const pollInterval = setInterval(() => {
-      if (!cancelled) fetchSorteos(true); // silent=true: no muestra spinner
-    }, 30_000);
+      if (!cancelled) fetchSorteos(true);
+    }, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
@@ -137,13 +190,13 @@ export function useSorteos(): UseSorteosResult {
     };
   }, []);
 
-  // Filtro de gating temporal para asegurar que jamás veamos resultados antes de la hora EXACTA
+  // Filtro de gating temporal: jamás revelar resultados antes de la hora exacta
   const visibleResults = results.filter((r) => {
     const today = getTodayStrVE();
-    if (r.date > today) return false; // si se coló algo de mañana
+    if (r.date > today) return false;
     if (r.date === today) {
       const rh = hourStrToNum(r.hour);
-      if (rh > currentH) return false; // El resultado se revela EXACTAMENTE cuando la hora VE alcanza rh
+      if (rh > currentH) return false;
     }
     return true;
   });

@@ -122,9 +122,12 @@ export default function ResultTicker() {
       : "";
 
   // Formato del countdown
-  const mins = Math.floor(countdown / 60);
+  const hrs = Math.floor(countdown / 3600);
+  const mins = Math.floor((countdown % 3600) / 60);
   const secs = countdown % 60;
-  const countdownStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  const countdownStr = hrs > 0 
+    ? `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    : `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
   return (
     <>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProyeccion } from "@/hooks/useProyeccion";
-import { useSorteos } from "@/hooks/useSorteos";
+import { useSorteosContext } from "@/context/SorteosContext";
 import { HOURS_LIST } from "@/data/mockData";
 
 /**
@@ -27,7 +27,7 @@ function getNextHourString(): string {
 }
 
 const ForecastTicker = () => {
-  const { results } = useSorteos();
+  const { results } = useSorteosContext();
   const { proyeccion, lastUpdated } = useProyeccion(results, 6, 4 * 60 * 60 * 1000);
 
   const [nextHour, setNextHour] = useState(getNextHourString);

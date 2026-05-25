@@ -56,6 +56,7 @@ import { LS_WEIGHTS_KEY, type SorteoMode } from "@/hooks/useProyeccion";
 import { SectionCarrusel as SectionCarruselAdmin } from "@/components/SectionCarrusel";
 import { useProbabilidades, type ProbabilidadRow, PROB_UPDATED_EVENT } from "@/hooks/useProbabilidades";
 import { useTheme } from "@/hooks/useTheme";
+import { clearCache, CACHE_KEYS } from "@/lib/cache";
 
 /* ── helpers ────────────────────────────────────────────────────── */
 const ALL_ANIMALS = ANIMALS.map((a) => a.name);
@@ -113,9 +114,9 @@ const SectionDashboard = () => {
 
         const { data: latestData } = await supabase
           .from("sorteos")
-          .select("*")
+          .select("id, fecha, hora, animal, emoji, numero")
           .order("fecha", { ascending: false })
-          .order("created_at", { ascending: false })
+          .order("hora", { ascending: false })
           .limit(6);
 
         const mDate = new Date();
@@ -462,7 +463,7 @@ const SectionConfiguracion = () => {
       try {
         const { data, error } = await supabase
           .from("bet_config")
-          .select("*")
+          .select("id, monto_minimo, monto_maximo, multiplicador_normal, multiplicador_comodin")
           .eq("id", 1)
           .single();
 
@@ -1327,7 +1328,7 @@ const SectionPronosticos = () => {
       try {
         const { data, error } = await supabase
           .from("pronosticos")
-          .select("*")
+          .select("id, hora, loteria, animal, numero")
           .order("created_at", { ascending: true });
 
         if (error) throw error;
@@ -1411,7 +1412,7 @@ const SectionPronosticos = () => {
       // Refresh list from server
       const { data: fresh, error: fetchErr } = await supabase
         .from("pronosticos")
-        .select("*")
+        .select("id")
         .order("created_at", { ascending: true });
 
       if (fetchErr) throw fetchErr;
@@ -1822,7 +1823,7 @@ const SectionSorteos = () => {
   const refreshSorteos = async () => {
     const { data, error } = await supabase
       .from("sorteos")
-      .select("*")
+      .select("id, animal, numero, hora, fecha, emoji")
       .order("fecha", { ascending: false })
       .order("hora", { ascending: true });
     if (error) throw error;
@@ -1951,6 +1952,9 @@ const SectionSorteos = () => {
         if (!availableDates.includes(form.date)) setPanelDate(form.date);
         sileo.success({ title: "Sorteo Registrado", description: "El nuevo resultado del sorteo ha sido guardado.", duration: 2000 });
       }
+
+      // Invalidar caché local para que la página pública reciba los datos frescos
+      clearCache(CACHE_KEYS.SORTEOS);
 
       // Refresh from DB
       const fresh = await refreshSorteos();

@@ -20,7 +20,7 @@ export const AnimalCarousel = () => {
     const fetchAnimals = async () => {
       const { data, error } = await supabase
         .from("carrusel_animales")
-        .select("*")
+        .select("id, nombre, imagen_url, orden")
         .order("orden", { ascending: true });
       if (!error && data) setAnimals(data);
       setLoading(false);
@@ -95,6 +95,8 @@ export const AnimalCarousel = () => {
                   alt={animal.nombre}
                   className="w-full h-full object-cover"
                   draggable={false}
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             ))}
