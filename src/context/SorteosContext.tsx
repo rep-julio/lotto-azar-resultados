@@ -17,6 +17,8 @@ import type { LotteryResult } from "@/data/mockData";
 interface SorteosContextValue {
   results: LotteryResult[];
   loading: boolean;
+  /** true mientras se cargan lotes históricos antiguos en background */
+  loadingHistory: boolean;
   error: string | null;
 }
 

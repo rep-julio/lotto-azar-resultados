@@ -15,6 +15,8 @@ interface SorteoRow {
 interface UseSorteosResult {
   results: LotteryResult[];
   loading: boolean;
+  /** true mientras se cargan lotes antiguos en background */
+  loadingHistory: boolean;
   error: string | null;
 }
 
@@ -76,6 +78,13 @@ function hashIds(rows: LotteryResult[]): string {
   return rows.map((r) => r.id).sort((a, b) => a - b).join(",");
 }
 
+/** Suma/resta días a una fecha string YYYY-MM-DD */
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
 /**
  * Polling Inteligente — calcula el intervalo óptimo en ms:
  *
@@ -95,12 +104,50 @@ function getPollingInterval(): number {
   return 5 * 60 * 1000;                       // Modo Ahorro: cada 5 min
 }
 
+/** Descarga un lote de datos entre dos fechas (inclusivo). Devuelve los resultados o null si hubo error. */
+async function fetchBatch(fromDate: string, toDate: string): Promise<LotteryResult[] | null> {
+  const { data, error } = await supabase
+    .from("sorteos")
+    .select("id, animal, numero, hora, fecha, emoji")
+    .gte("fecha", fromDate)
+    .lte("fecha", toDate)
+    .order("fecha", { ascending: false })
+    .order("hora", { ascending: true })
+    .limit(2000); // 60 días × ~12 sorteos/día = ~720 max
+
+  if (error) {
+    console.error("[useSorteos] Error en lote:", fromDate, "→", toDate, error.message);
+    return null;
+  }
+  return (data as SorteoRow[]).map(rowToResult);
+}
+
+/** Genera los rangos de lotes desde `oldestDate` hasta `newestDate`, en bloques de `chunkDays` días (más reciente primero). */
+function buildChunks(newestDate: string, oldestDate: string, chunkDays = 60): Array<{ from: string; to: string }> {
+  const chunks: Array<{ from: string; to: string }> = [];
+  let to = newestDate;
+  while (to > oldestDate) {
+    const from = addDays(to, -chunkDays + 1);
+    chunks.push({ from: from < oldestDate ? oldestDate : from, to });
+    to = addDays(from, -1);
+  }
+  return chunks;
+}
+
+/** Límite máximo del historial: 2 años atrás desde hoy */
+function getHistoryStartDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 730);
+  return d.toISOString().split("T")[0];
+}
+
 export function useSorteos(): UseSorteosResult {
   // Inicializar desde caché inmediatamente (0ms de espera visible)
   const [results, setResults] = useState<LotteryResult[]>(() => {
     return getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
   });
   const [loading, setLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastHashRef = useRef<string>("");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,67 +166,113 @@ export function useSorteos(): UseSorteosResult {
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchSorteos(silent = false) {
-      if (!silent) setLoading(true);
+    /**
+     * Actualiza el estado y la caché con los resultados fusionados.
+     * Devuelve el array ya truncado a 2 años.
+     */
+    function applyAndCache(current: LotteryResult[], incoming: LotteryResult[]): LotteryResult[] {
+      const merged = mergeResults(current, incoming);
+      const cutoffStr = getHistoryStartDate();
+      const trimmed = merged.filter((r) => r.date >= cutoffStr);
+      setCached(CACHE_KEYS.SORTEOS, trimmed);
+      return trimmed;
+    }
+
+    // ── FASE 1: datos recientes (últimos 30 días) → UI visible rápido ──
+    async function fetchRecent() {
+      setLoading(true);
       setError(null);
 
-      // ── Fetch delta: solo pedir datos desde la última fecha cacheada ──
-      const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
       const today = getTodayStrVE();
+      const from30 = addDays(today, -30);
 
-      // Primera visita: bajar 30 días. Visitas siguientes: solo desde ayer.
-      let fromDate: string;
-      if (cached.length === 0) {
-        const d = new Date();
-        d.setDate(d.getDate() - 30);
-        fromDate = d.toISOString().split("T")[0];
-      } else {
-        const d = new Date();
-        d.setDate(d.getDate() - 1);
-        fromDate = d.toISOString().split("T")[0];
-      }
-
-      const { data, error: sbError } = await supabase
-        .from("sorteos")
-        .select("id, animal, numero, hora, fecha, emoji")
-        .gte("fecha", fromDate)
-        .order("fecha", { ascending: false })
-        .order("hora", { ascending: true })
-        .limit(200);
-
+      const recent = await fetchBatch(from30, today);
       if (cancelled) return;
 
-      if (sbError) {
-        console.error("[useSorteos] Error al obtener sorteos:", sbError.message);
-        setError(sbError.message);
+      if (recent === null) {
+        // Intentar mostrar datos cacheados si los hay
+        const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+        setResults(cached);
+        setError("Error al cargar datos recientes");
         setLoading(false);
         return;
       }
 
-      const incoming = (data as SorteoRow[]).map(rowToResult);
-      const merged = mergeResults(cached, incoming);
-
-      // Truncar caché a los últimos 30 días para no saturar localStorage
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 30);
-      const cutoffStr = cutoff.toISOString().split("T")[0];
-      const trimmed = merged.filter((r) => r.date >= cutoffStr);
-
-      // Solo actualizar el estado si hubo cambios reales
+      // Fusionar con caché existente y mostrar
+      const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+      const trimmed = applyAndCache(cached, recent);
       const newHash = hashIds(trimmed);
-      if (silent && newHash === lastHashRef.current) {
-        scheduleNextPoll(silent);
-        return;
-      }
       lastHashRef.current = newHash;
-
-      // Guardar en caché (datos recortados a 30 días)
-      setCached(CACHE_KEYS.SORTEOS, trimmed);
-
       setResults(trimmed);
       setLoading(false);
 
-      // Programar el próximo poll con intervalo dinámico
+      // ── FASE 2: histórico antiguo en background (lotes de 60 días) ──
+      fetchHistoryInBackground(from30);
+    }
+
+    // ── FASE 2: carga progresiva del historial en segundo plano ──
+    async function fetchHistoryInBackground(newestAlreadyLoaded: string) {
+      const historyStart = getHistoryStartDate();
+      // Si ya tenemos todo el historial en caché, no hace falta volver a bajarlo
+      const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+      const oldestCached = cached.length > 0
+        ? cached.reduce((min, r) => r.date < min ? r.date : min, cached[0].date)
+        : newestAlreadyLoaded;
+
+      // Si la caché ya llega al inicio del historial, saltamos la descarga
+      if (oldestCached <= historyStart) {
+        scheduleNextPoll(true);
+        return;
+      }
+
+      setLoadingHistory(true);
+
+      // El día anterior al más antiguo cacheado es donde empezamos a bajar
+      const downloadUntil = addDays(oldestCached, -1);
+      const chunks = buildChunks(downloadUntil, historyStart, 60);
+
+      for (const chunk of chunks) {
+        if (cancelled) break;
+
+        const batch = await fetchBatch(chunk.from, chunk.to);
+        if (cancelled) break;
+        if (batch === null) continue; // Si falla un lote, seguir con el siguiente
+
+        // Fusionar con los datos actuales del estado
+        setResults(prev => {
+          const trimmed = applyAndCache(prev, batch);
+          lastHashRef.current = hashIds(trimmed);
+          return trimmed;
+        });
+
+        // Pequeña pausa entre lotes para no saturar Supabase
+        await new Promise(res => setTimeout(res, 300));
+      }
+
+      if (!cancelled) {
+        setLoadingHistory(false);
+        scheduleNextPoll(true);
+      }
+    }
+
+    // ── Fetch silencioso para el polling periódico (solo datos recientes) ──
+    async function fetchSilent() {
+      setError(null);
+      const today = getTodayStrVE();
+      const from = addDays(today, -1); // desde ayer basta para el polling
+
+      const incoming = await fetchBatch(from, today);
+      if (cancelled || incoming === null) return;
+
+      const cached = getCachedForever<LotteryResult[]>(CACHE_KEYS.SORTEOS) ?? [];
+      const trimmed = applyAndCache(cached, incoming);
+      const newHash = hashIds(trimmed);
+
+      if (newHash !== lastHashRef.current) {
+        lastHashRef.current = newHash;
+        setResults(trimmed);
+      }
+
       scheduleNextPoll(true);
     }
 
@@ -193,11 +286,14 @@ export function useSorteos(): UseSorteosResult {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
       const delay = getPollingInterval();
       pollTimerRef.current = setTimeout(() => {
-        if (!cancelled) fetchSorteos(silent);
+        if (!cancelled) {
+          if (silent) fetchSilent();
+          else fetchRecent();
+        }
       }, delay);
     }
 
-    fetchSorteos(false);
+    fetchRecent();
 
     return () => {
       cancelled = true;
@@ -216,5 +312,5 @@ export function useSorteos(): UseSorteosResult {
     return true;
   });
 
-  return { results: visibleResults, loading, error };
+  return { results: visibleResults, loading, loadingHistory, error };
 }

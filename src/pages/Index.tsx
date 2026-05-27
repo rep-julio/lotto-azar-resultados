@@ -20,7 +20,7 @@ const Index = () => {
   const premiosRef = useRef<HTMLDivElement>(null);
   const probRef    = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
-  const { results, loading, error } = useSorteosContext();
+  const { results, loading, loadingHistory, error } = useSorteosContext();
   const enjaulados = useEnjaulados(results);
 
   // tick "updated X mins ago"
@@ -68,7 +68,7 @@ const Index = () => {
               <ProbabilityPanel results={results} />
             </div>
             <div className="lg:col-span-8">
-              <EnjauladosPanel enjaulados={enjaulados} />
+              <EnjauladosPanel enjaulados={enjaulados} loadingHistory={loadingHistory} />
             </div>
           </div>
         )}
@@ -88,7 +88,7 @@ const Index = () => {
               <span className="text-xs opacity-70">{error}</span>
             </div>
           ) : (
-            <HistorySection results={results} />
+            <HistorySection results={results} loadingHistory={loadingHistory} />
           )}
         </div>
       </main>

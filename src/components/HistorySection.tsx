@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { LotteryResult } from "@/data/mockData";
-import { Search, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { formatAnimalNumber } from "@/lib/utils";
 
 interface HistorySectionProps {
   results: LotteryResult[];
+  loadingHistory?: boolean;
 }
 
 // Colour ring per animal initial (decorative, mimics the red circle style)
@@ -64,7 +65,7 @@ const HOURS_ORDER = [
   "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM",
 ];
 
-const HistorySection = ({ results }: HistorySectionProps) => {
+const HistorySection = ({ results, loadingHistory = false }: HistorySectionProps) => {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -203,6 +204,14 @@ const HistorySection = ({ results }: HistorySectionProps) => {
           </div>
         </div>
       </motion.div>
+
+      {/* Banner de carga del histórico en background */}
+      {loadingHistory && (
+        <div className="flex items-center justify-center gap-2 mb-3 text-xs text-muted-foreground animate-pulse">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span>Cargando historial completo en segundo plano…</span>
+        </div>
+      )}
 
       {/* Table wrapper */}
       <motion.div

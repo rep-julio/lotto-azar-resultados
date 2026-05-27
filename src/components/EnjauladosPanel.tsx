@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { type Enjaulado } from '@/hooks/useEnjaulados';
-import { Lock, Clock, CalendarX2, ChevronLeft, ChevronRight, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
+import { Lock, Clock, CalendarX2, ChevronLeft, ChevronRight, ArrowDownWideNarrow, ArrowUpNarrowWide, Loader2 } from 'lucide-react';
 import { cn, formatAnimalNumber } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface EnjauladosPanelProps {
   enjaulados: Enjaulado[];
+  loadingHistory?: boolean;
 }
 
-export const EnjauladosPanel: React.FC<EnjauladosPanelProps> = ({ enjaulados }) => {
+export const EnjauladosPanel: React.FC<EnjauladosPanelProps> = ({ enjaulados, loadingHistory = false }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -55,6 +56,12 @@ export const EnjauladosPanel: React.FC<EnjauladosPanelProps> = ({ enjaulados }) 
           <div>
             <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Enjaulados</h2>
             <p className="text-sm font-medium text-slate-500 dark:text-slate-300">Animales con más tiempo sin salir</p>
+            {loadingHistory && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                <span className="text-[11px] font-medium text-amber-500">Actualizando con historial completo…</span>
+              </div>
+            )}
           </div>
         </div>
 
