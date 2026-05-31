@@ -183,13 +183,13 @@ const SectionDashboard = () => {
       {/* Stat cards — hardcoded so Tailwind JIT detects border-l colors */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {/* Card 1 */}
-        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-blue-600 overflow-hidden flex flex-col">
           <div className="p-5 flex-1 relative flex flex-col justify-center">
             <h3 className="stat-value text-3xl font-extrabold text-blue-600 z-10 tracking-tight" data-value={vals[0].value}>
               {vals[0].value}
             </h3>
             <p className="mt-1 text-sm text-gray-500 font-medium z-10">{vals[0].label}</p>
-            <div className="absolute top-5 right-5 text-gray-100 z-0">
+            <div className="absolute top-5 right-5 text-blue-600 opacity-20 z-0">
               <Trophy className="h-10 w-10" strokeWidth={1.5} />
             </div>
           </div>
@@ -205,13 +205,13 @@ const SectionDashboard = () => {
         </div>
 
         {/* Card 2 */}
-        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-orange-600 overflow-hidden flex flex-col">
           <div className="p-5 flex-1 relative flex flex-col justify-center">
             <h3 className="stat-value text-3xl font-extrabold text-orange-600 z-10 tracking-tight" data-value={vals[1].value}>
               {vals[1].value}
             </h3>
             <p className="mt-1 text-sm text-gray-500 font-medium z-10">{vals[1].label}</p>
-            <div className="absolute top-5 right-5 text-gray-100 z-0">
+            <div className="absolute top-5 right-5 text-orange-600 opacity-20 z-0">
               <Users className="h-10 w-10" strokeWidth={1.5} />
             </div>
           </div>
@@ -227,13 +227,13 @@ const SectionDashboard = () => {
         </div>
 
         {/* Card 3 */}
-        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-[#47a84e] overflow-hidden flex flex-col">
           <div className="p-5 flex-1 relative flex flex-col justify-center">
             <h3 className="stat-value text-3xl font-extrabold text-[#47a84e] z-10 tracking-tight" data-value={vals[2].value}>
               {vals[2].value}
             </h3>
             <p className="mt-1 text-sm text-gray-500 font-medium z-10">{vals[2].label}</p>
-            <div className="absolute top-5 right-5 text-gray-100 z-0">
+            <div className="absolute top-5 right-5 text-[#47a84e] opacity-20 z-0">
               <Activity className="h-10 w-10" strokeWidth={1.5} />
             </div>
           </div>
@@ -249,13 +249,13 @@ const SectionDashboard = () => {
         </div>
 
         {/* Card 4 */}
-        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+        <div className="stat-card opacity-0 bg-white rounded-xl shadow-sm border border-[#f39c12] overflow-hidden flex flex-col">
           <div className="p-5 flex-1 relative flex flex-col justify-center">
             <h3 className="stat-value text-3xl font-extrabold text-[#f39c12] z-10 tracking-tight" data-value={vals[3].value}>
               {vals[3].value}
             </h3>
             <p className="mt-1 text-sm text-gray-500 font-medium z-10">{vals[3].label}</p>
-            <div className="absolute top-5 right-5 text-gray-100 z-0">
+            <div className="absolute top-5 right-5 text-[#f39c12] opacity-20 z-0">
               <Bell className="h-10 w-10" strokeWidth={1.5} />
             </div>
           </div>
@@ -279,10 +279,17 @@ const SectionDashboard = () => {
             <h3 className="font-semibold text-white text-sm">ÚLtimos Resultados</h3>
             <span className="text-xs text-blue-100 font-medium">{stats.latest.length} registros</span>
           </div>
-          <div className="overflow-x-auto relative">
+          <div className="overflow-x-auto relative min-h-[160px]">
             {stats.isLoading && (
-              <div className="absolute inset-0 bg-white/60 z-10 flex flex-col justify-center items-center backdrop-blur-[1px]">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center backdrop-blur-sm rounded-b-xl">
+                <l-squircle
+                  size="35"
+                  stroke="4.5"
+                  stroke-length="0.15"
+                  bg-opacity="0.1"
+                  speed="0.8"
+                  color="#2563eb"
+                ></l-squircle>
               </div>
             )}
             <table className="w-full text-sm">
@@ -578,12 +585,20 @@ const SectionConfiguracion = () => {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        </div>
-      ) : (
-        <div className="space-y-5 w-full max-w-6xl">
+      <div className="relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex items-center justify-center rounded-2xl min-h-[300px]">
+            <l-squircle
+              size="50"
+              stroke="6"
+              stroke-length="0.15"
+              bg-opacity="0.1"
+              speed="0.8"
+              color="#2563eb"
+            ></l-squircle>
+          </div>
+        )}
+        <div className={`space-y-5 w-full max-w-6xl transition-all duration-300 ${isLoading ? "blur-sm pointer-events-none select-none" : ""}`}>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
             {/* Tabla de pagos — Jugada Normal */}
@@ -781,7 +796,7 @@ const SectionConfiguracion = () => {
           {/* ── Tema del sitio público ────── */}
           <ThemeToggleCard />
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -978,8 +993,15 @@ const SectionProbabilidades = () => {
 
         <div className="overflow-x-auto relative flex-1 min-h-[400px]">
           {isLoading && (
-            <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center backdrop-blur-[1px]">
-              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-violet-600" />
+            <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center backdrop-blur-sm">
+              <l-squircle
+                size="40"
+                stroke="5"
+                stroke-length="0.15"
+                bg-opacity="0.1"
+                speed="0.8"
+                color="#7c3aed"
+              ></l-squircle>
             </div>
           )}
           <table className="w-full text-sm">
@@ -2381,8 +2403,15 @@ const SectionHistorial = () => {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden w-full relative">
         {isLoading && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
+            <l-squircle
+              size="50"
+              stroke="6"
+              stroke-length="0.15"
+              bg-opacity="0.1"
+              speed="0.8"
+              color="#2563eb"
+            ></l-squircle>
           </div>
         )}
         <div className="overflow-x-auto">
